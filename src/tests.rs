@@ -1180,6 +1180,22 @@ fn test_finalise() {
         fn make_subblock_decorator(&self) -> Self {
             TestDecorator
         }
+        
+        fn decorate_color_start(&mut self,color: crate::Color) -> (String, Self::Annotation) {
+            (format!("<color #{:02x}{:02x}{:02x}>",color.r,color.g,color.b),true)
+        }
+    
+        fn decorate_color_end(&mut self) -> String {
+            "</color>".to_string()
+        }
+
+        fn mark_nobreak_start(&mut self) -> (String, Self::Annotation) {
+            todo!()
+        }
+
+        fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
+            todo!()
+        }
     }
 
     assert_eq!(
@@ -1419,5 +1435,16 @@ fn test_links_outside_table() {
 [1]: https://example.com/verylonglinks
 [2]: http://www.facebook.com/pages
 "
+    );
+}
+#[test]
+fn test_nested_color() {
+    let html = r#"
+    <color value="ff00ff">fuck </color> 
+"#;
+    let text = from_read(html.as_bytes(), 80);
+    assert_eq!(
+        text,
+        "<color #ff00ff>fuck </color>"
     );
 }

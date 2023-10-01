@@ -101,7 +101,10 @@ pub trait Renderer {
 
     /// Finish strikeout text started earlier.
     fn end_strikeout(&mut self);
-
+    /// Start a color region
+    fn start_color(&mut self,color:crate::Color);
+    /// End a colored region
+    fn end_color(&mut self);
     /// Start a code region
     fn start_code(&mut self);
 

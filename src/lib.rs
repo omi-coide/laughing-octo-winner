@@ -301,6 +301,32 @@ impl RenderTable {
     }
 }
 
+/// Color 
+#[derive(Clone,Copy,Eq,PartialEq,Debug)]
+pub struct Color {
+    /// Red
+    pub r:u8,
+    /// Green
+    pub g:u8,
+    /// Blue
+    pub b:u8
+}
+impl Color {
+    /// Create a new Color from rgb value
+    pub fn new(r:u8,g:u8,b:u8)->Self{
+        Color{
+            r,g,b
+        }
+    }
+    /// Create a new Color from u32(useful in dealing forms with #0x7f7f7f, also check usize::from_str_radix)
+    pub fn from_u32(code:u32)->Self{
+        Color {
+            r: ((code & 0x00_ff_00_00u32) >>16) as u8,
+            g: ((code & 0x00_00_ff_00u32) >>8) as u8,
+            b: ((code & 0x00_00_00_ffu32) ) as u8
+        }
+    }
+}
 /// The node-specific information distilled from the DOM.
 #[derive(Clone, Debug)]
 pub enum RenderNodeInfo {
@@ -316,6 +342,10 @@ pub enum RenderNodeInfo {
     Strong(Vec<RenderNode>),
     /// A struck out region
     Strikeout(Vec<RenderNode>),
+    /// A colored region
+    Colored(Vec<RenderNode>,Color),
+    /// A password-protected region
+    Redacted(Vec<RenderNode>,String),
     /// A code region
     Code(Vec<RenderNode>),
     /// An image (src, title)
@@ -413,7 +443,7 @@ impl RenderNode {
 
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
             | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) => v
+            | Dt(ref v) | Dd(ref v) | Colored(ref v,_ )| Redacted(ref v, _)=> v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
@@ -494,6 +524,8 @@ impl RenderNode {
             Table(ref _t) => false,
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
+            Colored(ref v,_ ) => v.is_empty(),
+            Redacted(ref v , _) => v.is_empty()
         }
     }
 }
@@ -514,6 +546,8 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         | Em(ref v)
         | Strong(ref v)
         | Strikeout(ref v)
+        | Colored(ref v,_ )
+        | Redacted(ref v, _)
         | Code(ref v)
         | Block(ref v)
         | Div(ref v)
@@ -1058,6 +1092,61 @@ fn process_dom_node<'a, 'b, T: Write>(
                 expanded_name!(html "dl") => Finished(RenderNode::new(Dl(
                     desc_list_children_to_render_nodes(handle.clone(), err_out),
                 ))),
+                expanded_name!(html "color") => {
+                    let borrowed = attrs.borrow();
+                    let mut color : Option<Color>= None;
+                    for attr in borrowed.iter() {
+                        if &attr.name.local == "rgb" && !attr.value.is_empty() {
+                            let color_str = &*attr.value;
+                            if let Ok(color_num) = usize::from_str_radix(color_str, 16) {
+                                if color_num > 0xffffff as usize {
+                                    continue;
+                                } else {
+                                    color = Some(Color::from_u32(color_num as u32));
+                                    html_trace!("{:?},{:x}",color,color_num);
+                                }
+                            }
+                            continue;
+                        }
+                        if color.is_some() {
+                            break;
+                        }
+                    }
+                    if let Some(c) = color {
+                        let c = c.clone();
+                        pending(handle, move |_, cs| Some(RenderNode::new(Colored(cs,c))))
+                    } else {
+                        Nothing
+                    }
+                }
+                expanded_name!(html "mask") => {
+                    let borrowed = attrs.borrow();
+                    let mut password = String::new();
+                    for attr in borrowed.iter() {
+                        if &attr.name.local == "password" && !attr.value.is_empty() {
+                            password.push_str(&*attr.value);
+                            break;
+                        }
+                    }
+                    let pass: Box<String> = Box::new(password.clone());
+                    let pas = Box::leak(pass);
+                    pending(handle, move |_, cs| Some(RenderNode::new(Redacted(cs,pas.to_string()))))
+                }
+                // {
+                // let borrowed = attrs.borrow();
+                // let mut title = None;
+                // let mut src = None;
+                // for attr in borrowed.iter() {
+                //     if &attr.name.local == "alt" && !attr.value.is_empty() {
+                //         title = Some(&*attr.value);
+                //     }
+                //     if &attr.name.local == "src" && !attr.value.is_empty() {
+                //         src = Some(&*attr.value);
+                //     }
+                //     if title.is_some() && src.is_some() {
+                //         break;
+                //     }
+                // }
                 _ => {
                     html_trace!("Unhandled element: {:?}\n", name.local);
                     pending(handle, |_, cs| Some(RenderNode::new(Container(cs))))
@@ -1196,6 +1285,21 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 renderer.end_strikeout();
                 Some(None)
             })
+        }
+        Colored(children, color ) => {
+            renderer.start_color(color);
+            pending2(children, |renderer: &mut TextRenderer<D>,_| {
+                renderer.end_color();
+                Some(None)
+            })
+        } // 参考了Strikeout实现
+        Redacted(children, _)=> {
+            renderer.start_code();
+            pending2(children, |renderer: &mut TextRenderer<D>, _| {
+                renderer.end_code();
+                Some(None)
+            })
+            // renderer.start_password();
         }
         Code(children) => {
             renderer.start_code();
@@ -1634,6 +1738,8 @@ mod ansi_colours;
 
 #[cfg(feature = "ansi_colours")]
 pub use ansi_colours::from_read_coloured;
+#[cfg(feature = "ansi_colours")]
+pub use ansi_colours::from_read_custom;
 
 #[cfg(test)]
 mod tests;

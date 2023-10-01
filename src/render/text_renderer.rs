@@ -560,6 +560,14 @@ pub trait TextDecorator {
     /// Return a suffix for after an strikeout.
     fn decorate_strikeout_end(&mut self) -> String;
 
+    /// Return an annotation and rendering prefix for color
+    fn decorate_color_start(&mut self,color: crate::Color) -> (String, Self::Annotation);
+    /// Return a suffix for after a colored region.
+    fn decorate_color_end(&mut self) -> String;
+    /// mark a non-break begin
+    fn mark_nobreak_start(&mut self) -> (String, Self::Annotation);
+    /// mark a non-break end
+    fn mark_nobreak_end(&mut self) -> (String, Self::Annotation);
     /// Return an annotation and rendering prefix for code
     fn decorate_code_start(&mut self) -> (String, Self::Annotation);
 
@@ -1377,6 +1385,17 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.add_inline_text(&s);
         self.ann_stack.pop();
     }
+    fn start_color(&mut self, color:crate::Color){
+        let (s, annotation) = self.decorator.decorate_color_start(color);
+        self.ann_stack.push(annotation);
+        self.add_inline_text(&s);
+        // self.text_filter_stack.push(filter_text_color);
+    }
+    fn end_color(&mut self){
+        let s = self.decorator.decorate_color_end();
+        self.add_inline_text(&s);
+        self.ann_stack.pop();
+    }
     fn start_code(&mut self) {
         let (s, annotation) = self.decorator.decorate_code_start();
         self.ann_stack.push(annotation);
@@ -1520,6 +1539,22 @@ impl TextDecorator for PlainDecorator {
     fn make_subblock_decorator(&self) -> Self {
         self.clone()
     }
+
+    fn decorate_color_start(&mut self,color: crate::Color) -> (String, Self::Annotation) {
+        (format!("<color #{:02x}{:02x}{:02x}>",color.r,color.g,color.b),())
+    }
+
+    fn decorate_color_end(&mut self) -> String {
+        "</color>".to_string()
+    }
+
+    fn mark_nobreak_start(&mut self) -> (String, Self::Annotation) {
+        todo!()
+    }
+
+    fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
+        todo!()
+    }
 }
 
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
@@ -1613,6 +1648,22 @@ impl TextDecorator for TrivialDecorator {
     fn make_subblock_decorator(&self) -> Self {
         TrivialDecorator::new()
     }
+
+    fn decorate_color_start(&mut self,color: crate::Color) -> (String, Self::Annotation) {
+        (format!("<color #{:02x}{:02x}{:02x}>",color.r,color.g,color.b),())
+    }
+
+    fn decorate_color_end(&mut self) -> String {
+        "</color>".to_string()
+    }
+
+    fn mark_nobreak_start(&mut self) -> (String, Self::Annotation) {
+        todo!()
+    }
+
+    fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
+        todo!()
+    }
 }
 
 /// A decorator to generate rich text (styled) rather than
@@ -1636,10 +1687,18 @@ pub enum RichAnnotation {
     Strong,
     /// Stikeout text
     Strikeout,
+    /// Colored text
+    Colored(crate::Color),
     /// Code
     Code,
     /// Preformatted; true if a continuation line for an overly-long line.
     Preformat(bool),
+    /// begin
+    NoBreakBegin,
+    /// end
+    NoBreakEnd,
+    /// Bell
+    Bell
 }
 
 impl Default for RichAnnotation {
@@ -1734,4 +1793,21 @@ impl TextDecorator for RichDecorator {
     fn make_subblock_decorator(&self) -> Self {
         RichDecorator::new()
     }
+
+    fn decorate_color_start(&mut self,color: crate::Color) -> (String, Self::Annotation) {
+        ("".to_string(), RichAnnotation::Colored(color))
+    }
+
+    fn decorate_color_end(&mut self) -> String {
+        "".to_string()
+    }
+
+    fn mark_nobreak_start(&mut self) -> (String, Self::Annotation) {
+        ("".to_string(), RichAnnotation::NoBreakBegin)
+    }
+
+    fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
+        ("".to_string(), RichAnnotation::NoBreakEnd)
+    }
+    
 }

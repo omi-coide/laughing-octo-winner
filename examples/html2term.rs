@@ -65,6 +65,14 @@ mod top {
                         style.push_str(&format!("{}", termion::color::Fg(termion::color::Magenta)));
                     }
                 }
+                RichAnnotation::Colored(c) => {
+                    style.push_str(&format!("{}",termion::color::Fg(termion::color::AnsiValue::rgb(c.r,c.g,c.b))))
+                },
+                RichAnnotation::Bell => {
+                    style.push_str(&format!("bell!"))
+                }
+                RichAnnotation::NoBreakBegin => (),
+                RichAnnotation::NoBreakEnd => (),
             }
         }
         style

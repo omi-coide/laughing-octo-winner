@@ -20,10 +20,14 @@ xml5ever = "0.17"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
 
+[dependencies.colvert]
+version = "1.2"
+package = "ansi_colours"
+
 [features]
 html_trace = []
 html_trace_bt = ["backtrace"]
-default = []
+default = [ "ansi_colours" ]
 ansi_colours = []
 
 [[example]]
