@@ -1153,7 +1153,7 @@ fn test_finalise() {
             Default::default()
         }
 
-        fn decorate_image(&mut self, _src: &str, _title: &str) -> (String, Self::Annotation) {
+        fn decorate_image(&mut self, _src: &str, _title: &str, width: usize, h: usize) -> (String, Self::Annotation) {
             Default::default()
         }
 
@@ -1196,6 +1196,7 @@ fn test_finalise() {
         fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
             todo!()
         }
+
     }
 
     assert_eq!(

@@ -5,6 +5,8 @@ pub mod text_renderer;
 
 /// A type which is a backend for HTML to text rendering.
 pub trait Renderer {
+    /// Annotations 
+    type Annotation;
     /// Add an empty line to the output (ie between blocks).
     fn add_empty_line(&mut self);
 
@@ -105,6 +107,18 @@ pub trait Renderer {
     fn start_color(&mut self,color:crate::Color);
     /// End a colored region
     fn end_color(&mut self);
+    /// Start a nobreak
+    fn start_nobreak(&mut self) ;
+    /// End a nobreak
+    fn end_nobreak(&mut self) ;
+    /// Start an Annotated Region(when there's no decoration that adds strings)
+    #[allow(unused_variables)]
+    fn start_redacted(&mut self, psk:String, id: uuid::Uuid){
+    }
+    /// End an Annotated Region, just like begin color
+    #[allow(unused_variables)]
+    fn end_redacted(&mut self, psk:String, id: uuid::Uuid){
+    }
     /// Start a code region
     fn start_code(&mut self);
 
@@ -112,7 +126,7 @@ pub trait Renderer {
     fn end_code(&mut self);
 
     /// Add an image
-    fn add_image(&mut self, src: &str, title: &str);
+    fn add_image(&mut self, src: &str, title: &str, w:usize, h:usize);
 
     /// Get prefix string of header in specific level.
     fn header_prefix(&mut self, level: usize) -> String;

@@ -19,11 +19,19 @@ tendril = "0.4"
 xml5ever = "0.17"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
+crossterm = "0.27.0"
 
 [dependencies.colvert]
 version = "1.2"
 package = "ansi_colours"
 
+[dependencies.uuid]
+version = "1.4.1"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
 [features]
 html_trace = []
 html_trace_bt = ["backtrace"]

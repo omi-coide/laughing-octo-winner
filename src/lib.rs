@@ -345,11 +345,11 @@ pub enum RenderNodeInfo {
     /// A colored region
     Colored(Vec<RenderNode>,Color),
     /// A password-protected region
-    Redacted(Vec<RenderNode>,String),
+    Redacted(Vec<RenderNode>,String,uuid::Uuid),
     /// A code region
     Code(Vec<RenderNode>),
     /// An image (src, title)
-    Img(String, String),
+    Img(String, String,usize,usize),
     /// A block element with children
     Block(Vec<RenderNode>),
     /// A header (h1, h2, ...) with children
@@ -384,6 +384,12 @@ pub enum RenderNodeInfo {
     TableCell(RenderTableCell),
     /// Start of a named HTML fragment
     FragStart(String),
+    /// Section
+    Section(Vec<RenderNode>)
+    // NonBreakStart
+    // NonBreakStart,
+    // NonBreakEnd
+    // NonBreakEnd
 }
 
 /// Common fields from a node.
@@ -413,7 +419,7 @@ impl RenderNode {
 
         // Otherwise, make an estimate.
         let estimate = match self.info {
-            Text(ref t) | Img(_, ref t) => {
+            Text(ref t)  => {
                 use unicode_width::UnicodeWidthChar;
                 let mut len = 0;
                 let mut in_whitespace = false;
@@ -432,18 +438,21 @@ impl RenderNode {
                 if let Some(true) = t.chars().next().map(|c| c.is_whitespace()) {
                     len += 1;
                 }
-                if let Img(_, _) = self.info {
-                    len += 2;
-                }
                 SizeEstimate {
                     size: len,
                     min_width: len.min(MIN_WIDTH),
                 }
             }
-
+            Img(_, ref t, img_w, img_h) => {
+                let len = img_w * img_h;
+                SizeEstimate {
+                    size: len,
+                    min_width: len.min(MIN_WIDTH),
+                }
+            }
             Container(ref v) | Em(ref v) | Strong(ref v) | Strikeout(ref v) | Code(ref v)
             | Block(ref v) | Div(ref v) | Pre(ref v) | BlockQuote(ref v) | Dl(ref v)
-            | Dt(ref v) | Dd(ref v) | Colored(ref v,_ )| Redacted(ref v, _)=> v
+            | Dt(ref v) | Dd(ref v) | Colored(ref v,_ )| Redacted(ref v, _, _) | Section(ref v)=> v
                 .iter()
                 .map(RenderNode::get_size_estimate)
                 .fold(Default::default(), SizeEstimate::add),
@@ -499,11 +508,13 @@ impl RenderNode {
 
         // Otherwise, make an estimate.
         match self.info {
-            Text(ref t) | Img(_, ref t) => {
+            Text(ref t)  => {
                 let len = t.trim().len();
                 len == 0
             }
-
+            Img(_, ref t, w , h)=>{
+                w * h == 0
+            }
             Container(ref v)
             | Link(_, ref v)
             | Em(ref v)
@@ -525,7 +536,9 @@ impl RenderNode {
             TableRow(..) | TableBody(_) | TableCell(_) => false,
             FragStart(_) => true,
             Colored(ref v,_ ) => v.is_empty(),
-            Redacted(ref v , _) => v.is_empty()
+            Redacted(ref v , _, _) => v.is_empty(),
+            Section(ref v) => v.is_empty(),
+            
         }
     }
 }
@@ -536,7 +549,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         return TreeMapResult::Nothing;
     }
     match node.info {
-        Text(_) | Img(_, _) | Break | FragStart(_) => {
+        Text(_) | Img(_, _, _, _) | Break | FragStart(_) => {
             let _ = node.get_size_estimate();
             TreeMapResult::Nothing
         }
@@ -547,7 +560,8 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
         | Strong(ref v)
         | Strikeout(ref v)
         | Colored(ref v,_ )
-        | Redacted(ref v, _)
+        | Section(ref v)
+        | Redacted(ref v, _, _)
         | Code(ref v)
         | Block(ref v)
         | Div(ref v)
@@ -1022,6 +1036,8 @@ fn process_dom_node<'a, 'b, T: Write>(
                 }
                 expanded_name!(html "img") => {
                     let borrowed = attrs.borrow();
+                    let mut width = None;
+                    let mut height = None;
                     let mut title = None;
                     let mut src = None;
                     for attr in borrowed.iter() {
@@ -1031,13 +1047,36 @@ fn process_dom_node<'a, 'b, T: Write>(
                         if &attr.name.local == "src" && !attr.value.is_empty() {
                             src = Some(&*attr.value);
                         }
+                        // 图片宽度： 几个字符
+                        if &attr.name.local == "width" && !attr.value.is_empty() {
+                            let tmp = usize::from_str_radix(&*attr.value, 10);
+                            width = match tmp{
+                                Ok(w) => Some(w),
+                                Err(_) => None,
+                            };
+                        }
+                        // 图片高度： 几个字符
+                        if &attr.name.local == "height" && !attr.value.is_empty() {
+                            let tmp = usize::from_str_radix(&*attr.value, 10);
+                            height = match tmp{
+                                Ok(h) => Some(h),
+                                Err(_) => None,
+                            };
+                        }
                         if title.is_some() && src.is_some() {
                             break;
                         }
                     }
+                    let width = width.unwrap_or(0);
+                    let height = height.unwrap_or(0);
+                    if title.is_none() {
+                        title = Some("No Alt Text Provided");
+                    }
                     if let (Some(title), Some(src)) = (title, src) {
-                        Finished(RenderNode::new(Img(src.into(), title.into())))
+                        html_trace!("建立节点Img");
+                        Finished(RenderNode::new(Img(src.into(), title.into(),width,height)))
                     } else {
+                        html_trace!("无内容Img");
                         Nothing
                     }
                 }
@@ -1119,6 +1158,10 @@ fn process_dom_node<'a, 'b, T: Write>(
                         Nothing
                     }
                 }
+                expanded_name!(html "section") => {
+                    // let borrowed = attrs.borrow();
+                    pending(handle, |_, cs| Some(RenderNode::new(Section(cs))))
+                }
                 expanded_name!(html "mask") => {
                     let borrowed = attrs.borrow();
                     let mut password = String::new();
@@ -1130,7 +1173,8 @@ fn process_dom_node<'a, 'b, T: Write>(
                     }
                     let pass: Box<String> = Box::new(password.clone());
                     let pas = Box::leak(pass);
-                    pending(handle, move |_, cs| Some(RenderNode::new(Redacted(cs,pas.to_string()))))
+                    let uuid = uuid::Uuid::new_v4();
+                    pending(handle, move |_, cs: Vec<RenderNode>| Some(RenderNode::new(Redacted(cs,pas.to_string(),uuid))))
                 }
                 // {
                 // let borrowed = attrs.borrow();
@@ -1293,10 +1337,21 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 Some(None)
             })
         } // 参考了Strikeout实现
-        Redacted(children, _)=> {
-            renderer.start_code();
-            pending2(children, |renderer: &mut TextRenderer<D>, _| {
-                renderer.end_code();
+        Section(children) => {
+            renderer.start_nobreak();
+            pending2(children, |renderer: &mut TextRenderer<D>,_| {
+                renderer.end_nobreak();
+                Some(None)
+            })
+        }
+        Redacted(children, psk, id)=> {
+            renderer.start_redacted(psk.clone(),id);
+            let cloned_id = Box::new(id.clone());
+            let cloned_psk = Box::new(psk.clone());
+            pending2(children, move |renderer: &mut TextRenderer<D>, _| {
+                let unboxed_id = cloned_id.as_ref().to_owned();
+                let unboxed_psk = cloned_psk.as_ref().to_owned();
+                renderer.end_redacted(unboxed_psk,unboxed_id);
                 Some(None)
             })
             // renderer.start_password();
@@ -1308,8 +1363,8 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
                 Some(None)
             })
         }
-        Img(src, title) => {
-            renderer.add_image(&src, &title);
+        Img(src, title, w, h) => {
+            renderer.add_image(&src, &title,w ,h);
             Finished(None)
         }
         Block(children) => {
@@ -1740,6 +1795,8 @@ mod ansi_colours;
 pub use ansi_colours::from_read_coloured;
 #[cfg(feature = "ansi_colours")]
 pub use ansi_colours::from_read_custom;
+#[cfg(feature = "ansi_colours")]
+pub use ansi_colours::custom_render;
 
 #[cfg(test)]
 mod tests;

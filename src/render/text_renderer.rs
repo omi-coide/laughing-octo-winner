@@ -573,7 +573,16 @@ pub trait TextDecorator {
 
     /// Return a suffix for after an code.
     fn decorate_code_end(&mut self) -> String;
-
+    /// Return a mark for Start of Redacted Region
+    #[allow(unused_variables)]
+    fn decorate_redact_start(&self,psk: String, id: uuid::Uuid) -> (String, Self::Annotation){
+        (String::new(),Self::Annotation::default())
+    }
+    /// Return a mark for End of Redacted Region
+    #[allow(unused_variables)]
+    fn decorate_redact_end(&self,psk: String, id: uuid::Uuid) -> (String, Self::Annotation){
+        (String::new(),Self::Annotation::default())
+    }
     /// Return an annotation for the initial part of a preformatted line
     fn decorate_preformat_first(&mut self) -> Self::Annotation;
 
@@ -582,7 +591,7 @@ pub trait TextDecorator {
     fn decorate_preformat_cont(&mut self) -> Self::Annotation;
 
     /// Return an annotation and rendering prefix for a link.
-    fn decorate_image(&mut self, src: &str, title: &str) -> (String, Self::Annotation);
+    fn decorate_image(&mut self, src: &str, title: &str, w:usize ,h: usize) -> (String, Self::Annotation);
 
     /// Return prefix string of header in specific level.
     fn header_prefix(&mut self, level: usize) -> String;
@@ -720,11 +729,12 @@ impl BorderHoriz {
         self.segments
             .into_iter()
             .map(|seg| match seg {
-                BorderSegHoriz::Straight => '─',
-                BorderSegHoriz::StraightVert => '/',
-                BorderSegHoriz::JoinAbove => '┴',
-                BorderSegHoriz::JoinBelow => '┬',
-                BorderSegHoriz::JoinCross => '┼',
+                // table 样式
+                BorderSegHoriz::Straight => '-',
+                BorderSegHoriz::StraightVert => '|',
+                BorderSegHoriz::JoinAbove => '+',
+                BorderSegHoriz::JoinBelow => '+',
+                BorderSegHoriz::JoinCross => '+',
             })
             .collect::<String>()
     }
@@ -971,6 +981,7 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
 }
 
 impl<D: TextDecorator> Renderer for SubRenderer<D> {
+    type Annotation = D::Annotation;
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_all();
@@ -1396,6 +1407,36 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.add_inline_text(&s);
         self.ann_stack.pop();
     }
+    fn start_nobreak(&mut self) {
+        let (_, annotation) = self.decorator.mark_nobreak_start();
+        self.flush_all(); // important! flush first before directly modify self.lines
+        self.lines.push_back(RenderLine::Text(TaggedLine::from_string("".to_string(), &vec![annotation])));
+        // self.add_inline_text(&s);
+    }
+    fn end_nobreak(&mut self) {
+        let (_, annotation) = self.decorator.mark_nobreak_end();
+        self.flush_all(); // important! flush first before directly modify self.lines
+        self.lines.push_back(RenderLine::Text(TaggedLine::from_string("".to_string(), &vec![annotation])));
+    }
+    // fn start_annot(&mut self, ann: Self::Annotation) {
+    //     self.ann_stack.push(ann);
+    // }
+    // fn end_annot(&mut self) {
+    //     self.ann_stack.pop();
+    // }
+    fn start_redacted(&mut self, psk: String, id: uuid::Uuid) {
+        let (prompt,annotation) = self.decorator.decorate_redact_start(psk, id);
+        self.add_inline_text(&prompt);
+        self.flush_all();
+        self.lines.push_back(RenderLine::Text(TaggedLine::from_string("".to_string(), &vec![annotation])));
+        // self.ann_stack.push(self.decorator.mark_redacted(psk,uuid));
+    }
+    fn end_redacted(&mut self, psk: String, id: uuid::Uuid) {
+        let (prompt,annotation) = self.decorator.decorate_redact_end(psk, id);
+        self.add_inline_text(&prompt);
+        self.flush_all();
+        self.lines.push_back(RenderLine::Text(TaggedLine::from_string("".to_string(), &vec![annotation])));
+    }
     fn start_code(&mut self) {
         let (s, annotation) = self.decorator.decorate_code_start();
         self.ann_stack.push(annotation);
@@ -1406,11 +1447,20 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         self.add_inline_text(&s);
         self.ann_stack.pop();
     }
-    fn add_image(&mut self, src: &str, title: &str) {
-        let (s, tag) = self.decorator.decorate_image(src, title);
-        self.ann_stack.push(tag);
-        self.add_inline_text(&s);
-        self.ann_stack.pop();
+    fn add_image(&mut self, src: &str, title: &str, w:usize, h:usize) {
+        html_trace!("添加图片:{},{},{},{}",src,title,w,h);
+        html_trace!("{}",w*h);
+        let (s, tag) = self.decorator.decorate_image(src, title, w, h);
+        if w * h == 0{
+            html_trace!("添加图片替换文本:{},{},{},{}",src,title,w,h);
+            self.ann_stack.push(tag);
+            self.add_inline_text(&s);
+            self.ann_stack.pop();
+        } else {
+            html_trace!("添加图片:{},{},{},{}",src,title,w,h);
+            self.flush_all();
+            self.lines.push_back(RenderLine::Text(TaggedLine::from_string(format!("src:{},title:{}",src,title), &vec![tag])));
+        }
     }
 
     fn header_prefix(&mut self, level: usize) -> String {
@@ -1508,7 +1558,7 @@ impl TextDecorator for PlainDecorator {
         ()
     }
 
-    fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
+    fn decorate_image(&mut self, _src: &str, title: &str, w: usize, h:usize) -> (String, Self::Annotation) {
         (format!("[{}]", title), ())
     }
 
@@ -1555,6 +1605,8 @@ impl TextDecorator for PlainDecorator {
     fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
         todo!()
     }
+
+
 }
 
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
@@ -1620,7 +1672,7 @@ impl TextDecorator for TrivialDecorator {
         ()
     }
 
-    fn decorate_image(&mut self, _src: &str, title: &str) -> (String, Self::Annotation) {
+    fn decorate_image(&mut self, _src: &str, title: &str, w:usize, h:usize) -> (String, Self::Annotation) {
         // FIXME: this should surely be the alt text, not the title text
         (title.to_string(), ())
     }
@@ -1664,6 +1716,7 @@ impl TextDecorator for TrivialDecorator {
     fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
         todo!()
     }
+
 }
 
 /// A decorator to generate rich text (styled) rather than
@@ -1680,7 +1733,7 @@ pub enum RichAnnotation {
     /// A link with the target.
     Link(String),
     /// An image with its src (this tag is attached to the title text)
-    Image(String),
+    Image(String, usize ,usize),
     /// Emphasised text, which might be rendered in bold or another colour.
     Emphasis,
     /// Strong text, which might be rendered in bold or another colour.
@@ -1698,7 +1751,12 @@ pub enum RichAnnotation {
     /// end
     NoBreakEnd,
     /// Bell
-    Bell
+    Bell,
+    /// Redact
+    RedactedBegin(String,uuid::Uuid),
+    ///
+    RedactedEnd(String,uuid::Uuid)
+
 }
 
 impl Default for RichAnnotation {
@@ -1766,8 +1824,8 @@ impl TextDecorator for RichDecorator {
         RichAnnotation::Preformat(true)
     }
 
-    fn decorate_image(&mut self, src: &str, title: &str) -> (String, Self::Annotation) {
-        (title.to_string(), RichAnnotation::Image(src.to_string()))
+    fn decorate_image(&mut self, src: &str, title: &str, w:usize, h:usize) -> (String, Self::Annotation) {
+        (format!("[{}]", title.to_string()), RichAnnotation::Image(src.to_string(),w,h))
     }
 
     fn header_prefix(&mut self, level: usize) -> String {
@@ -1808,6 +1866,12 @@ impl TextDecorator for RichDecorator {
 
     fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
         ("".to_string(), RichAnnotation::NoBreakEnd)
+    }
+    fn decorate_redact_start(&self,psk: String, id: uuid::Uuid) -> (String, Self::Annotation) {
+        ("".to_string(), RichAnnotation::RedactedBegin(psk, id))
+    }
+    fn decorate_redact_end(&self,psk: String, id: uuid::Uuid) -> (String, Self::Annotation) {
+        ("".to_string(), RichAnnotation::RedactedEnd(psk, id))
     }
     
 }

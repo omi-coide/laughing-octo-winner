@@ -30,7 +30,7 @@ mod top {
                 RichAnnotation::Link(_) => {
                     style.push_str(&format!("{}", termion::style::Underline));
                 }
-                RichAnnotation::Image(_) => {
+                RichAnnotation::Image(_,..) => {
                     style.push_str(&format!(
                         "{}",
                         termion::color::Fg(termion::color::LightBlue)
@@ -73,6 +73,8 @@ mod top {
                 }
                 RichAnnotation::NoBreakBegin => (),
                 RichAnnotation::NoBreakEnd => (),
+                RichAnnotation::RedactedBegin(_, _) => (),
+                RichAnnotation::RedactedEnd(_, _) => (),
             }
         }
         style

@@ -1,10 +1,12 @@
 extern crate argparse;
 extern crate html2text;
+use html2text::html_trace;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 use std::io;
-use std::io::Write;
 use std::io::Read;
 use std::io::Result;
+use std::io::Write;
+use std::process::exit;
 use std::slice::Iter;
 
 pub struct StringReader<'a> {
@@ -12,7 +14,7 @@ pub struct StringReader<'a> {
 }
 
 impl<'a> StringReader<'a> {
-	/// Wrap a string in a `StringReader`, which implements `std::io::Read`.
+    /// Wrap a string in a `StringReader`, which implements `std::io::Read`.
     pub fn new(data: &'a str) -> Self {
         Self {
             iter: data.as_bytes().iter(),
@@ -38,40 +40,77 @@ use html2text::render::text_renderer::RichAnnotation;
 use termion;
 
 #[cfg(feature = "ansi_colours")]
-fn default_colour_map(annotation: &RichAnnotation) -> (String, Box<dyn Fn(&String) -> String>, String) {
+fn default_colour_map(
+    annotation: &RichAnnotation,
+) -> (String, Box<dyn Fn(&String) -> String>, String) {
     use termion::color::*;
     use RichAnnotation::*;
     match annotation {
-        Default => ("".into(), Box::new(|s|{s.to_string()}), "".into()),
+        Default => ("".into(), Box::new(|s| s.to_string()), "".into()),
         Link(_) => (
             format!("{}", termion::style::Underline),
-            Box::new(|s|{s.to_string()}),
+            Box::new(|s| s.to_string()),
             format!("{}", termion::style::Reset),
         ),
-        Image(_) => (format!("{}", Fg(Blue)), Box::new(|s|{s.to_string()}),format!("{}", Fg(Reset))),
+        Image(_,..) => (
+            format!("{}", Fg(Blue)),
+            Box::new(|s| s.to_string()),
+            format!("{}", Fg(Reset)),
+        ),
         Emphasis => (
             format!("{}", termion::style::Bold),
-            Box::new(|s|{s.to_string()}),
+            Box::new(|s| s.to_string()),
             format!("{}", termion::style::Reset),
         ),
-        Strong => (format!("{}", Fg(LightYellow)), Box::new(|s|{s.to_string()}),format!("{}", Fg(Reset))),
-        Strikeout => (format!("{}", Fg(LightBlack)), Box::new(|s|{s.to_string()}),format!("{}", Fg(Reset))),
-        Code => (format!("{}", Fg(Blue)),Box::new(|s|{s.to_string()}), format!("{}", Fg(Reset))),
-        Preformat(_) => (format!("{}", Fg(Blue)), Box::new(|s|{s.to_string()}),format!("{}", Fg(Reset))),
-        Colored(c) => ((format!("{}",Fg(AnsiValue(colvert::ansi256_from_rgb((c.r,c.g,c.b)))))),
-        Box::new(|s|{s.to_string()}),
-        format!("{}", Fg(Reset))),
+        Strong => (
+            format!("{}", Fg(LightYellow)),
+            Box::new(|s| s.to_string()),
+            format!("{}", Fg(Reset)),
+        ),
+        Strikeout => (
+            format!("{}", Fg(LightBlack)),
+            Box::new(|s| s.to_string()),
+            format!("{}", Fg(Reset)),
+        ),
+        Code => (
+            format!("{}", Fg(Blue)),
+            Box::new(|s| s.to_string()),
+            format!("{}", Fg(Reset)),
+        ),
+        Preformat(_) => (
+            format!("{}", Fg(Blue)),
+            Box::new(|s| s.to_string()),
+            format!("{}", Fg(Reset)),
+        ),
+        Colored(c) => (
+            (format!(
+                "{}",
+                Fg(AnsiValue(colvert::ansi256_from_rgb((c.r, c.g, c.b))))
+            )),
+            Box::new(|s| s.to_string()),
+            format!("{}", Fg(Reset)),
+        ),
         Bell => todo!(),
-        NoBreakBegin => (
+        NoBreakBegin => (String::new(), Box::new(|s| s.to_string()), String::new()),
+        NoBreakEnd => (String::new(), Box::new(|s| s.to_string()), String::new()),
+        RedactedBegin(_, _) => (String::new(), Box::new(|s| s.to_string()), String::new()),
+        RedactedEnd(_, _) => (String::new(), Box::new(|s| s.to_string()), String::new()),
+        /*(
             String::new(),
-            Box::new(|s|{s.to_string()}),
+            Box::new(|s: &String| {
+                let mut res = String::new();
+                for c in s.chars() {
+                    match unicode_width::UnicodeWidthChar::width(c){
+                        Some(0) |None => continue,
+                        Some(x) => {
+                            res.push_str("█".repeat(x).as_str())
+                        }
+                    }
+                }
+                res
+            }),
             String::new(),
-        ),
-        NoBreakEnd => (
-            String::new(),
-            Box::new(|s|{s.to_string()}),
-            String::new(),
-        ),
+        ),*/
     }
 }
 
@@ -82,18 +121,58 @@ where
     #[cfg(feature = "ansi_colours")]
     {
         if _use_colour {
-            return process_page(html2text::from_read_custom(input, width, default_colour_map).unwrap(),height);
+            eprintln!("{:#?}",html2text::custom_render(input, width, default_colour_map).unwrap());
+            exit(0)
+            // return process_page(
+            //     html2text::from_read_custom(input, width, default_colour_map).unwrap(),
+            //     height,
+            // );
         };
     }
     if literal {
-        let decorator: html2text::render::text_renderer::TrivialDecorator = html2text::render::text_renderer::TrivialDecorator::new();
+        let decorator: html2text::render::text_renderer::TrivialDecorator =
+            html2text::render::text_renderer::TrivialDecorator::new();
         html2text::from_read_with_decorator(input, width, decorator)
     } else {
         html2text::from_read(input, width)
     }
 }
-fn process_page(segs: Vec<String>,height:usize) -> String {
-    todo!()
+
+fn process_page(segs: Vec<String>, height: usize) -> String {
+    let mut result = String::new();
+    let mut ypos: usize = 0; //relative to 40
+    #[allow(unused_mut)]
+    let mut trace = false;
+    #[cfg(feature = "html_trace")]
+    {
+        trace = true;
+    }
+    for s in segs.iter() {
+        let s = s.as_str();
+        loop {
+            let lines: usize = s.lines().count();
+            if ypos == 0 {
+                result.push_str(s);
+                ypos += lines;
+                ypos = ypos % height;
+                break;
+            } else {
+                if ypos + lines >= height {
+                    if trace{
+                        result.push_str("PAD\n".repeat(height - ypos).as_str());
+                    } else {
+                        result.push_str("\n".repeat(height - ypos).as_str());
+                    }
+                    ypos = 0;
+                    continue;
+                } else {
+                    result.push_str(s);
+                    break;
+                }
+            }
+        }
+    }
+    result
 }
 fn main() {
     let mut infile: Option<String> = None;
@@ -140,12 +219,12 @@ fn main() {
     let data = match infile {
         None => {
             let stdin = io::stdin();
-            let data = translate(&mut stdin.lock(), width, 40 , literal, use_colour);
+            let data = translate(&mut stdin.lock(), width, 40, literal, use_colour);
             data
         }
         Some(name) => {
             let mut file = std::fs::File::open(name).expect("Tried to open file");
-            translate(&mut file, width, height,literal, use_colour)
+            translate(&mut file, width, height, literal, use_colour)
         }
     };
 
