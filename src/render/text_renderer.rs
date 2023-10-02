@@ -4,11 +4,9 @@
 //! into different text formats.
 
 use super::Renderer;
-use std::cell::Cell;
 use std::mem;
 use std::ops::Deref;
 use std::ops::DerefMut;
-use std::rc::Rc;
 use std::vec;
 use std::{collections::LinkedList, fmt::Debug};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
@@ -1490,124 +1488,6 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
     }
 }
 
-/// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
-/// with no annotations.  Markup is rendered as text characters or footnotes.
-#[derive(Clone, Debug)]
-pub struct PlainDecorator {
-    nlinks: Rc<Cell<usize>>,
-}
-
-impl PlainDecorator {
-    /// Create a new `PlainDecorator`.
-    #[cfg_attr(feature = "clippy", allow(new_without_default_derive))]
-    pub fn new() -> PlainDecorator {
-        PlainDecorator {
-            nlinks: Rc::new(Cell::new(0)),
-        }
-    }
-}
-
-impl TextDecorator for PlainDecorator {
-    type Annotation = ();
-
-    fn decorate_link_start(&mut self, _url: &str) -> (String, Self::Annotation) {
-        self.nlinks.set(self.nlinks.get() + 1);
-        ("[".to_string(), ())
-    }
-
-    fn decorate_link_end(&mut self) -> String {
-        format!("][{}]", self.nlinks.get())
-    }
-
-    fn decorate_em_start(&mut self) -> (String, Self::Annotation) {
-        ("*".to_string(), ())
-    }
-
-    fn decorate_em_end(&mut self) -> String {
-        "*".to_string()
-    }
-
-    fn decorate_strong_start(&mut self) -> (String, Self::Annotation) {
-        ("**".to_string(), ())
-    }
-
-    fn decorate_strong_end(&mut self) -> String {
-        "**".to_string()
-    }
-
-    fn decorate_strikeout_start(&mut self) -> (String, Self::Annotation) {
-        ("".to_string(), ())
-    }
-
-    fn decorate_strikeout_end(&mut self) -> String {
-        "".to_string()
-    }
-
-    fn decorate_code_start(&mut self) -> (String, Self::Annotation) {
-        ("`".to_string(), ())
-    }
-
-    fn decorate_code_end(&mut self) -> String {
-        "`".to_string()
-    }
-
-    fn decorate_preformat_first(&mut self) -> Self::Annotation {
-        ()
-    }
-    fn decorate_preformat_cont(&mut self) -> Self::Annotation {
-        ()
-    }
-
-    fn decorate_image(&mut self, _src: &str, title: &str, _w: usize, _h:usize) -> (String, Self::Annotation) {
-        (format!("[{}]", title), ())
-    }
-
-    fn header_prefix(&mut self, level: usize) -> String {
-        "#".repeat(level) + " "
-    }
-
-    fn quote_prefix(&mut self) -> String {
-        "> ".to_string()
-    }
-
-    fn unordered_item_prefix(&mut self) -> String {
-        "* ".to_string()
-    }
-
-    fn ordered_item_prefix(&mut self, i: i64) -> String {
-        format!("{}. ", i)
-    }
-
-    fn finalise(&mut self, links: Vec<String>) -> Vec<TaggedLine<()>> {
-        links
-            .into_iter()
-            .enumerate()
-            .map(|(idx, s)| TaggedLine::from_string(format!("[{}]: {}", idx + 1, s), &()))
-            .collect()
-    }
-
-    fn make_subblock_decorator(&self) -> Self {
-        self.clone()
-    }
-
-    fn decorate_color_start(&mut self,color: crate::Color) -> (String, Self::Annotation) {
-        (format!("<color #{:02x}{:02x}{:02x}>",color.r,color.g,color.b),())
-    }
-
-    fn decorate_color_end(&mut self) -> String {
-        "</color>".to_string()
-    }
-
-    fn mark_nobreak_start(&mut self) -> (String, Self::Annotation) {
-        todo!()
-    }
-
-    fn mark_nobreak_end(&mut self) -> (String, Self::Annotation) {
-        todo!()
-    }
-
-
-}
 
 /// A decorator for use with `SubRenderer` which outputs plain UTF-8 text
 /// with no annotations or markup, emitting only the literal text.

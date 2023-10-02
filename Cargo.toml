@@ -19,7 +19,7 @@ tendril = "0.4"
 xml5ever = "0.17"
 unicode-width = "0.1.5"
 backtrace = { version = "0.3", optional=true }
-crossterm = "0.27.0"
+# crossterm = "0.27.0"
 
 [dependencies.colvert]
 version = "1.2"

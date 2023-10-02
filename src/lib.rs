@@ -61,7 +61,7 @@ mod macros;
 pub mod render;
 
 use render::text_renderer::{
-    PlainDecorator, RenderLine, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
+    RenderLine, RichAnnotation, RichDecorator, SubRenderer, TaggedLine,
     TextDecorator, TextRenderer,
 };
 use render::Renderer;
@@ -1702,13 +1702,6 @@ impl RenderTree {
         RenderedText(builder)
     }
 
-    /// Render this document as plain text using the [`PlainDecorator`][] and wrap it to `width`
-    /// columns.
-    ///
-    /// [`PlainDecorator`]: render/text_renderer/struct.PlainDecorator.html
-    pub fn render_plain(self, width: usize) -> RenderedText<PlainDecorator> {
-        self.render(width, PlainDecorator::new())
-    }
 
     /// Render this document as rich text using the [`RichDecorator`][] and wrap it to `width`
     /// columns.
@@ -1766,15 +1759,6 @@ where
     parse(input).render(width, decorator).into_string()
 }
 
-/// Reads HTML from `input`, and returns a `String` with text wrapped to
-/// `width` columns.
-pub fn from_read<R>(input: R, width: usize) -> String
-where
-    R: io::Read,
-{
-    let decorator = PlainDecorator::new();
-    from_read_with_decorator(input, width, decorator)
-}
 
 /// Reads HTML from `input`, and returns text wrapped to `width` columns.
 /// The text is returned as a `Vec<TaggedLine<_>>`; the annotations are vectors
@@ -1791,13 +1775,9 @@ where
 #[cfg(feature = "ansi_colours")]
 mod ansi_colours;
 
-#[cfg(feature = "ansi_colours")]
-pub use ansi_colours::from_read_coloured;
-#[cfg(feature = "ansi_colours")]
-pub use ansi_colours::from_read_custom;
+
 #[cfg(feature = "ansi_colours")]
 pub use ansi_colours::custom_render;
 #[cfg(feature = "ansi_colours")]
 pub use ansi_colours::Control;
-#[cfg(test)]
-mod tests;
+
