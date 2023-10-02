@@ -25,6 +25,7 @@ crossterm = "0.27.0"
 version = "1.2"
 package = "ansi_colours"
 
+
 [dependencies.uuid]
 version = "1.4.1"
 features = [
@@ -35,8 +36,9 @@ features = [
 [features]
 html_trace = []
 html_trace_bt = ["backtrace"]
-default = [ "ansi_colours" ]
+default = [ "ansi_colours", "image"]
 ansi_colours = []
+image = []
 
 [[example]]
 name = "html2term"
@@ -51,3 +53,7 @@ argparse = "0.2.2"
 
 [target.'cfg(unix)'.dev-dependencies]
 termion = "1.5"
+
+[profile.release]
+opt-level = 'z'
+lto = true

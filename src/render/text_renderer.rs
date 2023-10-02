@@ -1558,7 +1558,7 @@ impl TextDecorator for PlainDecorator {
         ()
     }
 
-    fn decorate_image(&mut self, _src: &str, title: &str, w: usize, h:usize) -> (String, Self::Annotation) {
+    fn decorate_image(&mut self, _src: &str, title: &str, _w: usize, _h:usize) -> (String, Self::Annotation) {
         (format!("[{}]", title), ())
     }
 
@@ -1672,7 +1672,7 @@ impl TextDecorator for TrivialDecorator {
         ()
     }
 
-    fn decorate_image(&mut self, _src: &str, title: &str, w:usize, h:usize) -> (String, Self::Annotation) {
+    fn decorate_image(&mut self, _src: &str, title: &str, _w:usize,_hh:usize) -> (String, Self::Annotation) {
         // FIXME: this should surely be the alt text, not the title text
         (title.to_string(), ())
     }

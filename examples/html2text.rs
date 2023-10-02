@@ -1,12 +1,12 @@
 extern crate argparse;
 extern crate html2text;
+#[allow(unused_imports)]
 use html2text::html_trace;
 use argparse::{ArgumentParser, Store, StoreOption, StoreTrue};
 use std::io;
 use std::io::Read;
 use std::io::Result;
 use std::io::Write;
-use std::process::exit;
 use std::slice::Iter;
 
 pub struct StringReader<'a> {
@@ -95,26 +95,10 @@ fn default_colour_map(
         NoBreakEnd => (String::new(), Box::new(|s| s.to_string()), String::new()),
         RedactedBegin(_, _) => (String::new(), Box::new(|s| s.to_string()), String::new()),
         RedactedEnd(_, _) => (String::new(), Box::new(|s| s.to_string()), String::new()),
-        /*(
-            String::new(),
-            Box::new(|s: &String| {
-                let mut res = String::new();
-                for c in s.chars() {
-                    match unicode_width::UnicodeWidthChar::width(c){
-                        Some(0) |None => continue,
-                        Some(x) => {
-                            res.push_str("█".repeat(x).as_str())
-                        }
-                    }
-                }
-                res
-            }),
-            String::new(),
-        ),*/
     }
 }
 
-fn translate<R>(input: R, width: usize, height: usize, literal: bool, _use_colour: bool) -> String
+fn translate<R>(input: R, width: usize, _height: usize,_literall: bool, _use_colour: bool) -> String
 where
     R: io::Read,
 {
@@ -122,58 +106,61 @@ where
     {
         if _use_colour {
             eprintln!("{:#?}",html2text::custom_render(input, width, default_colour_map).unwrap());
-            exit(0)
             // return process_page(
             //     html2text::from_read_custom(input, width, default_colour_map).unwrap(),
             //     height,
             // );
         };
+        return format!("");
     }
-    if literal {
-        let decorator: html2text::render::text_renderer::TrivialDecorator =
-            html2text::render::text_renderer::TrivialDecorator::new();
-        html2text::from_read_with_decorator(input, width, decorator)
-    } else {
-        html2text::from_read(input, width)
-    }
+    // if literal {
+    //     let decorator: html2text::render::text_renderer::TrivialDecorator =
+    //         html2text::render::text_renderer::TrivialDecorator::new();
+    //     html2text::from_read_with_decorator(input, width, decorator)
+    // } else {
+    //     html2text::from_read(input, width)
+    // }
 }
-
-fn process_page(segs: Vec<String>, height: usize) -> String {
-    let mut result = String::new();
-    let mut ypos: usize = 0; //relative to 40
-    #[allow(unused_mut)]
-    let mut trace = false;
-    #[cfg(feature = "html_trace")]
-    {
-        trace = true;
-    }
-    for s in segs.iter() {
-        let s = s.as_str();
-        loop {
-            let lines: usize = s.lines().count();
-            if ypos == 0 {
-                result.push_str(s);
-                ypos += lines;
-                ypos = ypos % height;
-                break;
-            } else {
-                if ypos + lines >= height {
-                    if trace{
-                        result.push_str("PAD\n".repeat(height - ypos).as_str());
-                    } else {
-                        result.push_str("\n".repeat(height - ypos).as_str());
-                    }
-                    ypos = 0;
-                    continue;
-                } else {
-                    result.push_str(s);
-                    break;
-                }
-            }
-        }
-    }
-    result
+use html2text::Control;
+fn process_page(segs:Vec<Control>, height: usize){
+    
 }
+// fn process_page(segs: Vec<String>, height: usize) -> String {
+//     let mut result = String::new();
+//     let mut ypos: usize = 0; //relative to 40
+//     #[allow(unused_mut)]
+//     let mut trace = false;
+//     #[cfg(feature = "html_trace")]
+//     {
+//         trace = true;
+//     }
+//     for s in segs.iter() {
+//         let s = s.as_str();
+//         loop {
+//             let lines: usize = s.lines().count();
+//             if ypos == 0 {
+//                 result.push_str(s);
+//                 ypos += lines;
+//                 ypos = ypos % height;
+//                 break;
+//             } else {
+//                 if ypos + lines >= height {
+//                     if trace{
+//                         result.push_str("PAD\n".repeat(height - ypos).as_str());
+//                     } else {
+//                         result.push_str("\n".repeat(height - ypos).as_str());
+//                     }
+//                     ypos = 0;
+//                     continue;
+//                 } else {
+//                     result.push_str(s);
+//                     break;
+//                 }
+//             }
+//         }
+//     }
+//     result
+// }
 fn main() {
     let mut infile: Option<String> = None;
     let mut outfile: Option<String> = None;
@@ -237,6 +224,6 @@ fn main() {
             write!(file, "{}", data).unwrap();
         }
     };
-    let mut file = std::fs::File::create("/tmp/test").expect("Tried to create file");
-    write!(file, "{}", "测试内容".to_string()).unwrap();
+
+
 }

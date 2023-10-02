@@ -443,7 +443,7 @@ impl RenderNode {
                     min_width: len.min(MIN_WIDTH),
                 }
             }
-            Img(_, ref t, img_w, img_h) => {
+            Img(_, _, img_w, img_h) => {
                 let len = img_w * img_h;
                 SizeEstimate {
                     size: len,
@@ -512,7 +512,7 @@ impl RenderNode {
                 let len = t.trim().len();
                 len == 0
             }
-            Img(_, ref t, w , h)=>{
+            Img(_, _, w , h)=>{
                 w * h == 0
             }
             Container(ref v)
@@ -1797,6 +1797,7 @@ pub use ansi_colours::from_read_coloured;
 pub use ansi_colours::from_read_custom;
 #[cfg(feature = "ansi_colours")]
 pub use ansi_colours::custom_render;
-
+#[cfg(feature = "ansi_colours")]
+pub use ansi_colours::Control;
 #[cfg(test)]
 mod tests;

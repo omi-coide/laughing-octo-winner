@@ -6,9 +6,7 @@
 
 use uuid::Uuid;
 
-use crate::render::text_renderer::TaggedString;
 use crate::{parse, RichAnnotation, RichDecorator};
-use std::collections::HashMap;
 use std::fmt::Write;
 use std::{io, vec};
 
@@ -129,6 +127,7 @@ where
     html_trace!("segments:{:?}", segments);
     Ok(segments)
 }
+#[allow(missing_docs)]
 #[derive(Debug, Clone)]
 pub enum Control {
     Default,
@@ -139,7 +138,7 @@ pub enum Control {
     NoBreakEnd,
     Image(String,usize,usize)
 }
-pub struct Page {
+/* pub struct Page {
     pub width: usize,
     pub height: usize,
     pub lines: Vec<(String, Control)>,
@@ -147,7 +146,7 @@ pub struct Page {
 pub struct Article {
     pages: Vec<Page>,
     passwords: HashMap<Uuid, (String, bool)>,
-}
+} */
 /// 重要
 pub fn custom_render<R, FMap>(
     input: R,
@@ -207,7 +206,7 @@ where
             }
             for ann in &ts.tag {
                 match ann {
-                    RichAnnotation::RedactedEnd(psk, id) => cmds.push(Control::RedactedEnd(*id)),
+                    RichAnnotation::RedactedEnd(_, id) => cmds.push(Control::RedactedEnd(*id)),
                     RichAnnotation::NoBreakEnd => cmds.push(Control::NoBreakEnd),
                     _ => (),
                 }
