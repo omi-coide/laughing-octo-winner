@@ -113,18 +113,9 @@ where
         };
         return format!("");
     }
-    // if literal {
-    //     let decorator: html2text::render::text_renderer::TrivialDecorator =
-    //         html2text::render::text_renderer::TrivialDecorator::new();
-    //     html2text::from_read_with_decorator(input, width, decorator)
-    // } else {
-    //     html2text::from_read(input, width)
-    // }
+
 }
-use html2text::Control;
-fn process_page(segs:Vec<Control>, height: usize){
-    
-}
+
 // fn process_page(segs: Vec<String>, height: usize) -> String {
 //     let mut result = String::new();
 //     let mut ypos: usize = 0; //relative to 40

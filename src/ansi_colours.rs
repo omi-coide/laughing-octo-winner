@@ -18,17 +18,11 @@ pub enum Control {
     Str(String),
     NoBreakBegin,
     NoBreakEnd,
-    Image(String,usize,usize)
+    Image(String, usize, usize),
+    Bell(String),
+    LF,
+    StrRedacted(String,uuid::Uuid)
 }
-/* pub struct Page {
-    pub width: usize,
-    pub height: usize,
-    pub lines: Vec<(String, Control)>,
-}
-pub struct Article {
-    pages: Vec<Page>,
-    passwords: HashMap<Uuid, (String, bool)>,
-} */
 /// 重要
 pub fn custom_render<R, FMap>(
     input: R,
@@ -44,31 +38,51 @@ where
         .into_lines();
     let mut cmds: Vec<Control> = vec![];
     html_trace!("循环开始: lines:{:#?}", lines);
+    let mut redacted_stack:Vec<Uuid> = vec![];
     for line in lines {
+        let mut is_marker = false;
         for ts in line.tagged_strings() {
             let mut start = String::new();
             let mut finish = String::new();
             let mut content = String::new();
             let mut mutated = false;
-            let mut is_img = false;
+            is_marker = false;
             for ann in &ts.tag {
                 match ann {
-                    RichAnnotation::NoBreakBegin => cmds.push(Control::NoBreakBegin),
+                    RichAnnotation::NoBreakBegin => {
+                        assert!(&ts.s.is_empty());
+                        is_marker = true;
+                        cmds.push(Control::NoBreakBegin);
+                    }
                     RichAnnotation::RedactedBegin(psk, id) => {
-                        cmds.push(Control::RedactedBegin(psk.to_string(), *id))
-                    },
+                        assert!(&ts.s.is_empty());
+                        is_marker = true;
+                        redacted_stack.push(*id);
+                        // cmds.push(Control::RedactedBegin(psk.to_string(), *id));
+                    }
                     RichAnnotation::Image(src, w, h) => {
-                        if w*h >=1 {
-                            is_img = true;
+                        if w * h >= 1 {
+                            // assert!(&ts.s.is_empty());
+                            is_marker = true;
                             cmds.push(Control::Image(src.to_string(), *w, *h))
                         } else {
-
                         }
-                    }
+                    },
+                    RichAnnotation::RedactedEnd(_, id) => {
+                        assert!(&ts.s.is_empty());
+                        is_marker = true;
+                        // cmds.push(Control::RedactedEnd(*id));
+                        assert!(redacted_stack.last().unwrap()==id,"密码区段不得嵌套");
+                        redacted_stack.pop();
+                    },
+                    RichAnnotation::NoBreakEnd => {
+                        assert!(&ts.s.is_empty());
+                        is_marker = true;
+                        cmds.push(Control::NoBreakEnd)},
                     _ => (),
                 }
-            };
-            if is_img {
+            }
+            if is_marker {
                 break;
             }
 
@@ -81,20 +95,21 @@ where
                 html_trace!("变化后:{:?}", mutator(&ts.s));
                 content.push_str(&mutator(&ts.s));
             }
+            let mut s = String::new();
             if mutated {
-                cmds.push(Control::Str(format!("{}{}{}", start, content, finish)));
+                s += format!("{}{}{}", start, content, finish).as_str();
             } else {
-                cmds.push(Control::Str(format!("{}{}{}", start, ts.s, finish)));
+                s += format!("{}{}{}", start, ts.s, finish).as_str();
             }
-            for ann in &ts.tag {
-                match ann {
-                    RichAnnotation::RedactedEnd(_, id) => cmds.push(Control::RedactedEnd(*id)),
-                    RichAnnotation::NoBreakEnd => cmds.push(Control::NoBreakEnd),
-                    _ => (),
-                }
+            if let Some(id) = redacted_stack.last() {
+                cmds.push(Control::StrRedacted(s, *id))
+            } else {
+                cmds.push(Control::Str(s))
             }
         }
-
+        if !is_marker {
+            cmds.push(Control::LF);
+        }
         // html_trace!("YLY: 单元高度:{},单元内容：{:?}",&unit.lines().count(),&unit);
     }
 
