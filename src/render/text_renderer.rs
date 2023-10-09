@@ -591,6 +591,8 @@ pub trait TextDecorator {
     /// Return an annotation and rendering prefix for a link.
     fn decorate_image(&mut self, src: &str, title: &str, w:usize ,h: usize) -> (String, Self::Annotation);
 
+    /// 自定义类型，用字符串表示
+    fn custom(&mut self, src: &str,value: Vec<String>) -> Self::Annotation;
     /// Return prefix string of header in specific level.
     fn header_prefix(&mut self, level: usize) -> String;
 
@@ -980,6 +982,7 @@ fn filter_text_strikeout(s: &str) -> Option<String> {
 
 impl<D: TextDecorator> Renderer for SubRenderer<D> {
     type Annotation = D::Annotation;
+    type Asset = Vec<String>;
     fn add_empty_line(&mut self) {
         html_trace!("add_empty_line()");
         self.flush_all();
@@ -1461,6 +1464,14 @@ impl<D: TextDecorator> Renderer for SubRenderer<D> {
         }
     }
 
+    fn add_asset(&mut self, typ: &str,value:Vec<String>){
+        if typ == "audio" {
+            assert!(!value.is_empty());
+            self.lines.push_back(RenderLine::Text(TaggedLine::from_string("".to_string(),&vec![self.decorator.custom("audio",value)])));
+        } else {
+            html_trace!("sliently discard unknown resource type{}",typ);
+        }
+    }
     fn header_prefix(&mut self, level: usize) -> String {
         self.decorator.header_prefix(level)
     }
@@ -1526,8 +1537,9 @@ pub enum RichAnnotation {
     /// Redact
     RedactedBegin(String,uuid::Uuid),
     ///
-    RedactedEnd(String,uuid::Uuid)
-
+    RedactedEnd(String,uuid::Uuid),
+    ///
+    Custom(String,Vec<String>)
 }
 
 impl Default for RichAnnotation {
@@ -1643,6 +1655,10 @@ impl TextDecorator for RichDecorator {
     }
     fn decorate_redact_end(&self,psk: String, id: uuid::Uuid) -> (String, Self::Annotation) {
         ("".to_string(), RichAnnotation::RedactedEnd(psk, id))
+    }
+    // typ 传递类型， value 传递值
+    fn custom(&mut self, typ: &str,value: Vec<String>) -> Self::Annotation {
+        RichAnnotation::Custom(typ.to_string(),value)
     }
     
 }

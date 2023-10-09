@@ -385,7 +385,9 @@ pub enum RenderNodeInfo {
     /// Start of a named HTML fragment
     FragStart(String),
     /// Section
-    Section(Vec<RenderNode>)
+    Section(Vec<RenderNode>),
+    /// Audio
+    Audio(String)
     // NonBreakStart
     // NonBreakStart,
     // NonBreakEnd
@@ -495,6 +497,7 @@ impl RenderNode {
             Table(ref t) => t.get_size_estimate(),
             TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
             FragStart(_) => Default::default(),
+            Audio(_) => Default::default() ,
         };
         self.size_estimate.set(Some(estimate));
         estimate
@@ -538,6 +541,7 @@ impl RenderNode {
             Colored(ref v,_ ) => v.is_empty(),
             Redacted(ref v , _, _) => v.is_empty(),
             Section(ref v) => v.is_empty(),
+            Audio(_) => false,
             
         }
     }
@@ -600,6 +604,7 @@ fn precalc_size_estimate<'a>(node: &'a RenderNode) -> TreeMapResult<(), &'a Rend
             }
         }
         TableRow(..) | TableBody(_) | TableCell(_) => unimplemented!(),
+        Audio(_) => TreeMapResult::Nothing,
     }
 }
 
@@ -1176,6 +1181,26 @@ fn process_dom_node<'a, 'b, T: Write>(
                     let uuid = uuid::Uuid::new_v4();
                     pending(handle, move |_, cs: Vec<RenderNode>| Some(RenderNode::new(Redacted(cs,pas.to_string(),uuid))))
                 }
+                expanded_name!(html "audio") => {
+                    let borrowed = attrs.borrow();
+                    let mut src = None;
+                    for attr in borrowed.iter() {
+                        if &attr.name.local == "src" && !attr.value.is_empty() {
+                            src = Some(&*attr.value);
+                        }
+                        if src.is_some() {
+                            break;
+                        }
+                    }
+
+                    if let Some(src) = src {
+                        html_trace!("建立节点audio");
+                        Finished(RenderNode::new(Audio(src.to_string())))
+                    } else {
+                        html_trace!("无内容audio");
+                        Nothing
+                    }
+                }
                 // {
                 // let borrowed = attrs.borrow();
                 // let mut title = None;
@@ -1365,6 +1390,10 @@ fn do_render_node<'a, 'b, T: Write, D: TextDecorator>(
         }
         Img(src, title, w, h) => {
             renderer.add_image(&src, &title,w ,h);
+            Finished(None)
+        }
+        Audio(src) => {
+            renderer.add_asset("audio",vec![src]);
             Finished(None)
         }
         Block(children) => {

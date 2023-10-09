@@ -75,6 +75,7 @@ mod top {
                 RichAnnotation::NoBreakEnd => (),
                 RichAnnotation::RedactedBegin(_, _) => (),
                 RichAnnotation::RedactedEnd(_, _) => (),
+                RichAnnotation::Custom(_, _) => (),
             }
         }
         style

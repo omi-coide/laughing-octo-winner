@@ -7,6 +7,8 @@ pub mod text_renderer;
 pub trait Renderer {
     /// Annotations 
     type Annotation;
+    /// 自定义的Asset 类型
+    type Asset;
     /// Add an empty line to the output (ie between blocks).
     fn add_empty_line(&mut self);
 
@@ -127,7 +129,8 @@ pub trait Renderer {
 
     /// Add an image
     fn add_image(&mut self, src: &str, title: &str, w:usize, h:usize);
-
+    /// 
+    fn add_asset(&mut self, key: &str, value: Self::Asset);
     /// Get prefix string of header in specific level.
     fn header_prefix(&mut self, level: usize) -> String;
 

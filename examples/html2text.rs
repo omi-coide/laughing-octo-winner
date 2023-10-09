@@ -40,7 +40,7 @@ use html2text::render::text_renderer::RichAnnotation;
 use termion;
 
 #[cfg(feature = "ansi_colours")]
-fn default_colour_map(
+pub fn default_colour_map(
     annotation: &RichAnnotation,
 ) -> (String, Box<dyn Fn(&String) -> String>, String) {
     use termion::color::*;
@@ -95,6 +95,7 @@ fn default_colour_map(
         NoBreakEnd => (String::new(), Box::new(|s| s.to_string()), String::new()),
         RedactedBegin(_, _) => (String::new(), Box::new(|s| s.to_string()), String::new()),
         RedactedEnd(_, _) => (String::new(), Box::new(|s| s.to_string()), String::new()),
+        Custom(_, _) => (String::new(), Box::new(|s| s.to_string()), String::new()),
     }
 }
 

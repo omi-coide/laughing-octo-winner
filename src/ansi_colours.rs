@@ -21,7 +21,8 @@ pub enum Control {
     Image(String, usize, usize),
     Bell(String),
     LF,
-    StrRedacted(String,uuid::Uuid)
+    StrRedacted(String,uuid::Uuid),
+    Audio(String)
 }
 /// 重要
 pub fn custom_render<R, FMap>(
@@ -79,6 +80,15 @@ where
                         assert!(&ts.s.is_empty());
                         is_marker = true;
                         cmds.push(Control::NoBreakEnd)},
+                    RichAnnotation::Custom(typ, value) => {
+                        if typ == "audio" {
+                            assert!(!value.is_empty());
+                            is_marker = true;
+                            cmds.push(Control::Audio(value[0].clone()))
+                        } else {
+                            html_trace!("遇到不认识的Custom 注解");
+                        }
+                    }
                     _ => (),
                 }
             }
