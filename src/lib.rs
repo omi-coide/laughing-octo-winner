@@ -1807,6 +1807,10 @@ mod ansi_colours;
 
 #[cfg(feature = "ansi_colours")]
 pub use ansi_colours::custom_render;
+pub use ansi_colours::try_build_block;
+pub use ansi_colours::PageBlock;
+pub use ansi_colours::just_parse;
+pub use ansi_colours::just_render;
 #[cfg(feature = "ansi_colours")]
 pub use ansi_colours::Control;
 

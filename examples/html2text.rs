@@ -106,7 +106,11 @@ where
     #[cfg(feature = "ansi_colours")]
     {
         if _use_colour {
-            eprintln!("{:#?}",html2text::custom_render(input, width, default_colour_map).unwrap());
+            let result = html2text::custom_render(input, width, default_colour_map).unwrap();
+            eprintln!("{:#?}",result);
+            let result = html2text::try_build_block(&result);
+            eprintln!("{:#?}",result);
+            
             // return process_page(
             //     html2text::from_read_custom(input, width, default_colour_map).unwrap(),
             //     height,
